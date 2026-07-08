@@ -1,6 +1,11 @@
 import type { AppState, Payment, Settings, Swimmer } from './types'
 import { todayInTz } from './dates'
-import { REMOTE_ENABLED, ApiError, fetchRemoteState, pushRemoteState } from './api'
+import { REMOTE_ENABLED, ApiError, fetchRemoteState, pushRemoteState, recoverTokens } from './api'
+
+/** Recovery PIN as actually enforced: blank falls back to the 1111 default. */
+export function effectivePin(settings: Settings): string {
+  return (settings.recoveryPin ?? '').trim() || '1111'
+}
 
 const STORAGE_KEY = 'kapok-swim-club/v1'
 const PUSH_DEBOUNCE_MS = 600
@@ -41,6 +46,7 @@ function seedState(): AppState {
     coachToken: REMOTE_ENABLED ? '' : token(),
     parentToken: REMOTE_ENABLED ? '' : token(),
     timezone: 'Asia/Macau',
+    recoveryPin: '1111',
   }
   const swimmers: Swimmer[] = SEED_NAMES.map((displayName, i) => ({
     id: uid(),
@@ -217,6 +223,40 @@ class Store {
       }
     })()
     return this.connecting
+  }
+
+  /**
+   * Reveal the share tokens for a device that lost its link. Returns the tokens
+   * on the right PIN, null on a wrong PIN, or throws on a network failure.
+   * On success the tokens are cached locally so Home shows the buttons and
+   * Settings shows the links (the device stays read-only until it opens the
+   * coach link and the server validates it).
+   */
+  async recover(pin: string): Promise<{ coachToken: string; parentToken: string } | null> {
+    const clean = pin.trim()
+    if (!REMOTE_ENABLED) {
+      if (clean !== effectivePin(this.state.settings)) return null
+      const { coachToken, parentToken } = this.state.settings
+      return { coachToken, parentToken }
+    }
+    let tokens: { coachToken: string; parentToken: string }
+    try {
+      tokens = await recoverTokens(clean)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 403) return null
+      throw e
+    }
+    this.state = {
+      ...this.state,
+      settings: {
+        ...this.state.settings,
+        coachToken: tokens.coachToken,
+        parentToken: tokens.parentToken,
+      },
+    }
+    persist(this.state)
+    this.notify()
+    return tokens
   }
 
   private startPolling() {

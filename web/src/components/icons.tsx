@@ -168,6 +168,13 @@ export const LockIcon = (p: IconProps) => (
   </Base>
 )
 
+export const KeyIcon = (p: IconProps) => (
+  <Base {...p}>
+    <circle cx="8" cy="15" r="4" />
+    <path d="M10.85 12.15 20 3M17 6l2.5 2.5M14.5 8.5 17 11" />
+  </Base>
+)
+
 /** Brand mark: swimmer wave in a rounded tile. */
 export function WaveMark({ className = 'h-12 w-12' }: { className?: string }) {
   return (

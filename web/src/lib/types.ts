@@ -12,6 +12,8 @@ export interface Settings {
   parentToken: string
   /** IANA timezone used to resolve "today" and month boundaries. */
   timezone: string
+  /** PIN that reveals the share links on the Home page. Defaults to '1111'. */
+  recoveryPin?: string
 }
 
 export interface Swimmer {

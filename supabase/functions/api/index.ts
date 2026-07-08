@@ -3,6 +3,10 @@
 //   GET  /functions/v1/api?token=...   → returns the whole AppState.
 //                                         Coach token: full state.
 //                                         Parent token: state with coachToken hidden.
+//   GET  /functions/v1/api?pin=...     → recovery: if the PIN matches
+//                                         settings.recoveryPin (default 1111),
+//                                         returns just { coachToken, parentToken }
+//                                         so a fresh device can find its links.
 //   POST /functions/v1/api?token=...   → replaces the whole AppState (coach token only).
 //
 // Deploy with JWT verification OFF so the browser needs no Supabase auth header —
@@ -51,6 +55,19 @@ Deno.serve(async (req) => {
   const isParent = token !== '' && token === state.settings?.parentToken
 
   if (req.method === 'GET') {
+    // Recovery path: a device that lost (or never had) its link can trade the
+    // PIN for the coach/parent tokens. This grants edit access, so the coach
+    // should set a private PIN — see settings.recoveryPin (defaults to 1111).
+    const pin = url.searchParams.get('pin')
+    if (pin !== null) {
+      const realPin = String(state.settings?.recoveryPin ?? '').trim() || '1111'
+      if (pin.trim() !== realPin) return json({ error: 'invalid_pin' }, 403)
+      return json({
+        coachToken: state.settings?.coachToken,
+        parentToken: state.settings?.parentToken,
+      })
+    }
+
     if (!isCoach && !isParent) return json({ error: 'invalid_token' }, 403)
     if (isCoach) return json(state)
     // Parents must not learn the coach (edit) token.

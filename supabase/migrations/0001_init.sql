@@ -28,7 +28,8 @@ values (
       'currencyLabel', '元',
       'coachToken', replace(gen_random_uuid()::text, '-', ''),
       'parentToken', replace(gen_random_uuid()::text, '-', ''),
-      'timezone', 'Asia/Macau'
+      'timezone', 'Asia/Macau',
+      'recoveryPin', '1111'
     ),
     'swimmers', (
       select jsonb_agg(

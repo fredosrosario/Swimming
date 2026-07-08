@@ -84,6 +84,19 @@ export default function SettingsScreen() {
         />
       </Section>
 
+      <Section title={t('settings.recovery')}>
+        <Field label={t('settings.recoveryPin')}>
+          <input
+            value={settings.recoveryPin ?? '1111'}
+            onChange={(e) => store.updateSettings({ recoveryPin: e.target.value })}
+            inputMode="numeric"
+            autoComplete="off"
+            className="input tracking-[0.2em]"
+          />
+        </Field>
+        <p className="text-xs leading-relaxed text-slate-400">{t('settings.recoveryHint')}</p>
+      </Section>
+
       <Section title={t('settings.language')}>
         <LanguageToggle />
       </Section>

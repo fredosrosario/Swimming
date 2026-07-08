@@ -36,3 +36,13 @@ export async function fetchRemoteState(token: string): Promise<AppState> {
 export async function pushRemoteState(token: string, state: AppState): Promise<void> {
   await call('POST', token, state)
 }
+
+/** Trade a recovery PIN for the share tokens. Throws ApiError(403) on a wrong
+ *  PIN, or a network error when offline. No custom headers → no CORS preflight. */
+export async function recoverTokens(
+  pin: string,
+): Promise<{ coachToken: string; parentToken: string }> {
+  const res = await fetch(`${ENDPOINT}?pin=${encodeURIComponent(pin)}`, { method: 'GET' })
+  if (!res.ok) throw new ApiError('GET', res.status)
+  return (await res.json()) as { coachToken: string; parentToken: string }
+}
