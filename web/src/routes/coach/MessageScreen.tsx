@@ -2,59 +2,89 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { store } from '../../lib/store'
 import { useAppState } from '../../lib/useStore'
-import { buildMonthlyMessage } from '../../lib/ledger'
+import { buildMonthlyMessage, monthlyOwing } from '../../lib/ledger'
+import { addMonths, formatMonthTitle } from '../../lib/dates'
+import { EmptyState, Stepper, toast } from '../../components/ui'
+import { CopyIcon, ShareIcon } from '../../components/icons'
 
 export default function MessageScreen() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const state = useAppState()
   const [month, setMonth] = useState(() => store.today().slice(0, 7))
-  const [copied, setCopied] = useState(false)
 
-  const message = useMemo(() => {
+  const { message, rows, total } = useMemo(() => {
     const [y, m] = month.split('-').map(Number)
-    return buildMonthlyMessage(state, y, m)
+    const owing = monthlyOwing(state, month)
+    return {
+      message: buildMonthlyMessage(state, y, m),
+      rows: owing,
+      total: owing.reduce((s, r) => s + r.total, 0),
+    }
   }, [state, month])
 
-  // "empty" = only the header + footer, nobody owes.
-  const bodyLines = message.split('\n').length
-  const isEmpty = bodyLines <= 4
+  const currency = state.settings.currencyLabel
+  const canShare = typeof navigator !== 'undefined' && 'share' in navigator
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(message)
+      toast(t('message.copied'))
     } catch {
-      /* clipboard may be blocked; the textarea is selectable as fallback */
+      /* clipboard may be blocked; the textarea below stays selectable */
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1800)
+  }
+
+  async function share() {
+    try {
+      await navigator.share({ text: message })
+    } catch {
+      /* user cancelled the share sheet */
+    }
   }
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      <div className="flex items-center gap-2 rounded-xl bg-white p-3 shadow-sm">
-        <label className="text-sm text-slate-500">{t('message.month')}</label>
-        <input
-          type="month"
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-          className="rounded-lg border border-slate-200 px-2 py-1 text-sm"
+      <div className="card p-3">
+        <Stepper
+          prevLabel={t('common.prev')}
+          nextLabel={t('common.next')}
+          onPrev={() => setMonth(addMonths(month, -1))}
+          onNext={() => setMonth(addMonths(month, 1))}
+          label={formatMonthTitle(month, i18n.language)}
         />
       </div>
 
-      <textarea
-        readOnly
-        value={message}
-        className="h-80 w-full resize-none rounded-xl border border-slate-200 bg-white p-3 font-mono text-sm leading-relaxed text-slate-800 shadow-sm"
-      />
+      {rows.length === 0 ? (
+        <EmptyState emoji="🎉" title={t('message.empty')} hint={t('message.emptyHint')} />
+      ) : (
+        <>
+          <div className="flex justify-center">
+            <span className="chip bg-rose-50 text-sm text-rose-600 !py-1.5">
+              {t('message.stats', { count: rows.length, amount: `${total}${currency}` })}
+            </span>
+          </div>
 
-      {isEmpty && <p className="text-center text-sm text-slate-400">{t('message.empty')}</p>}
+          <textarea
+            readOnly
+            value={message}
+            aria-label={t('nav.message')}
+            className="card h-72 w-full resize-none border-0 p-4 font-mono text-sm leading-relaxed text-slate-800"
+          />
 
-      <button
-        onClick={copy}
-        className="rounded-xl bg-brand-600 py-3 font-semibold text-white active:bg-brand-700"
-      >
-        {copied ? t('message.copied') : t('message.copy')}
-      </button>
+          <div className="flex gap-2">
+            <button onClick={copy} className="btn-primary flex-1">
+              <CopyIcon className="h-5 w-5" />
+              {t('message.copy')}
+            </button>
+            {canShare && (
+              <button onClick={share} className="btn-secondary shrink-0">
+                <ShareIcon className="h-5 w-5" />
+                {t('message.share')}
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

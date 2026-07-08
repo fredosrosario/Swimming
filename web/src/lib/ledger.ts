@@ -90,6 +90,39 @@ export function sessionCount(state: AppState, swimmerId: string, asOfMonth?: str
   ).length
 }
 
+export interface OwingRow {
+  swimmer: Swimmer
+  months: MonthAmount[]
+  total: number
+}
+
+/**
+ * Every active swimmer with a positive outstanding balance as of the end of
+ * the given month — the data behind the monthly message and its summary.
+ */
+export function monthlyOwing(state: AppState, asOfMonth: string): OwingRow[] {
+  return [...state.swimmers]
+    .filter((s) => s.active)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((swimmer) => {
+      const months = outstandingByMonth(state, swimmer.id, asOfMonth)
+      return { swimmer, months, total: months.reduce((s, m) => s + m.amount, 0) }
+    })
+    .filter((r) => r.total > 0)
+}
+
+/** Attended sessions for a swimmer in a month, oldest first, with amounts. */
+export function attendedSessions(
+  state: AppState,
+  swimmerId: string,
+  month: string,
+): { date: string; amount: number }[] {
+  return state.attendance
+    .filter((a) => a.swimmerId === swimmerId && monthKey(a.sessionDate) === month)
+    .map((a) => ({ date: a.sessionDate, amount: chargeAmount(a, state.settings) }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
 function formatSwimmerLine(
   swimmer: Swimmer,
   months: MonthAmount[],
@@ -115,13 +148,8 @@ export function buildMonthlyMessage(state: AppState, year: number, month: number
 
   const lines: string[] = [`${year}年${month}月份${venueName}門票。`]
 
-  const activeSwimmers = [...state.swimmers]
-    .filter((s) => s.active)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-
-  for (const swimmer of activeSwimmers) {
-    const months = outstandingByMonth(state, swimmer.id, asOfMonth)
-    lines.push(...formatSwimmerLine(swimmer, months, currencyLabel))
+  for (const row of monthlyOwing(state, asOfMonth)) {
+    lines.push(...formatSwimmerLine(row.swimmer, row.months, currencyLabel))
   }
 
   lines.push('', '請大家MP轉給我。', '註了名不用再給訊息')

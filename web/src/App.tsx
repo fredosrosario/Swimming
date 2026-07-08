@@ -1,16 +1,22 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { store } from './lib/store'
 import { useAppState, useSyncStatus } from './lib/useStore'
+import { WaveMark } from './components/icons'
 import CoachApp from './routes/CoachApp'
 import ParentApp from './routes/ParentApp'
 import InvalidLink from './routes/InvalidLink'
 import Home from './routes/Home'
 
 function Loading() {
+  const { t } = useTranslation()
   return (
-    <div className="flex min-h-full items-center justify-center p-8 text-slate-400">
-      <span className="animate-pulse">…</span>
+    <div className="flex min-h-full flex-col items-center justify-center gap-4 p-8">
+      <WaveMark className="h-14 w-14 animate-pulse" />
+      <p className="text-sm text-slate-400" role="status">
+        {t('common.loading')}
+      </p>
     </div>
   )
 }

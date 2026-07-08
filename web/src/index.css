@@ -18,4 +18,65 @@ body {
     sans-serif;
   -webkit-tap-highlight-color: transparent;
   background: #f1f5f9;
+  overscroll-behavior-y: none;
+}
+
+@layer base {
+  /* One consistent, visible focus treatment everywhere (keyboard users). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-1 ring-offset-slate-100;
+  }
+  button {
+    @apply select-none;
+    touch-action: manipulation;
+  }
+  input,
+  textarea {
+    font-size: 16px; /* prevents iOS zoom-on-focus */
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-white shadow-sm;
+  }
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 font-semibold transition-transform active:scale-[0.98] disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn bg-brand-600 text-white active:bg-brand-700;
+  }
+  .btn-secondary {
+    @apply btn bg-slate-100 text-slate-700 active:bg-slate-200;
+  }
+  .btn-danger {
+    @apply btn bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-200 active:bg-rose-100;
+  }
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-slate-800 placeholder:text-slate-400 focus:border-brand-400;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .section-label {
+    @apply px-1 text-xs font-semibold uppercase tracking-wide text-slate-400;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

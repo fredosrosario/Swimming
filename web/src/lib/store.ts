@@ -84,6 +84,10 @@ export interface SyncStatus {
   role: SyncRole
   /** Server explicitly rejected the token (403) — the link is invalid. */
   rejected: boolean
+  /** Local edits exist that have not landed on the server yet. */
+  saving: boolean
+  /** The last push attempt failed (offline?); retrying automatically. */
+  pushFailed: boolean
 }
 
 class Store {
@@ -96,6 +100,8 @@ class Store {
     loaded: !REMOTE_ENABLED, // local-only mode is "loaded" from localStorage
     role: REMOTE_ENABLED ? null : 'coach', // local-only mode: always writable
     rejected: false,
+    saving: false,
+    pushFailed: false,
   }
   private connecting: Promise<void> | null = null
   private pushTimer: ReturnType<typeof setTimeout> | null = null
@@ -120,12 +126,8 @@ class Store {
 
   private setSync(patch: Partial<SyncStatus>) {
     const next = { ...this.sync, ...patch }
-    if (
-      next.loaded === this.sync.loaded &&
-      next.role === this.sync.role &&
-      next.rejected === this.sync.rejected
-    )
-      return
+    const keys = Object.keys(next) as (keyof SyncStatus)[]
+    if (keys.every((k) => next[k] === this.sync[k])) return
     this.sync = next
     this.notify()
   }
@@ -246,6 +248,7 @@ class Store {
   }
 
   private schedulePush(delay = PUSH_DEBOUNCE_MS) {
+    this.setSync({ saving: true })
     if (this.pushTimer) clearTimeout(this.pushTimer)
     this.pushTimer = setTimeout(() => {
       this.pushTimer = null
@@ -263,14 +266,17 @@ class Store {
     this.pushInFlight = true
     try {
       await pushRemoteState(tok, this.state)
+      // Only report "saved" when no newer edit is already queued.
+      if (this.pushTimer === null) this.setSync({ saving: false, pushFailed: false })
     } catch (e) {
       if (e instanceof ApiError && e.status === 403) {
         this.forgetRejectedToken(tok)
-        this.setSync({ rejected: true, role: null })
+        this.setSync({ rejected: true, role: null, saving: false })
       } else {
         // Offline / transient failure: never drop the edit — retry until the
         // push lands.
         console.error('remote push failed; will retry', e)
+        this.setSync({ pushFailed: true })
         this.schedulePush(PUSH_RETRY_MS)
       }
     } finally {
@@ -403,9 +409,11 @@ class Store {
       clearTimeout(this.pushTimer)
       this.pushTimer = null
     }
+    this.setSync({ saving: true })
     try {
       await pushRemoteState(sessionToken, next)
       if (which === 'coachToken') this.token = fresh
+      if (this.pushTimer === null) this.setSync({ saving: false, pushFailed: false })
     } catch (e) {
       console.error('token rotation push failed; will retry', e)
       this.schedulePush(PUSH_RETRY_MS)

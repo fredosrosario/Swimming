@@ -1,6 +1,15 @@
-import { useState } from 'react'
+import { useState, type ComponentType, type SVGProps } from 'react'
 import { useTranslation } from 'react-i18next'
-import LanguageToggle from '../components/LanguageToggle'
+import { useAppState } from '../lib/useStore'
+import SyncBadge from '../components/SyncBadge'
+import { Toaster, useOnline } from '../components/ui'
+import {
+  MessageIcon,
+  PaymentsIcon,
+  RollCallIcon,
+  RosterIcon,
+  SettingsIcon,
+} from '../components/icons'
 import AttendanceScreen from './coach/AttendanceScreen'
 import PaymentsScreen from './coach/PaymentsScreen'
 import RosterScreen from './coach/RosterScreen'
@@ -9,26 +18,41 @@ import SettingsScreen from './coach/SettingsScreen'
 
 type Tab = 'attendance' | 'payments' | 'roster' | 'message' | 'settings'
 
-const TABS: { key: Tab; icon: string }[] = [
-  { key: 'attendance', icon: '✓' },
-  { key: 'payments', icon: '$' },
-  { key: 'roster', icon: '☰' },
-  { key: 'message', icon: '✉' },
-  { key: 'settings', icon: '⚙' },
+const TABS: { key: Tab; Icon: ComponentType<SVGProps<SVGSVGElement>> }[] = [
+  { key: 'attendance', Icon: RollCallIcon },
+  { key: 'payments', Icon: PaymentsIcon },
+  { key: 'roster', Icon: RosterIcon },
+  { key: 'message', Icon: MessageIcon },
+  { key: 'settings', Icon: SettingsIcon },
 ]
 
 export default function CoachApp() {
   const { t } = useTranslation()
+  const { settings } = useAppState()
   const [tab, setTab] = useState<Tab>('attendance')
+  const online = useOnline()
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col bg-slate-100">
-      <header className="flex items-center justify-between border-b bg-white px-4 py-2">
-        <span className="font-semibold text-slate-700">{t(`nav.${tab}`)}</span>
-        <LanguageToggle />
+      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 pb-2 pt-safe backdrop-blur">
+        <div className="flex items-center justify-between pt-2">
+          <div className="min-w-0">
+            <h1 className="truncate text-base font-bold text-slate-800">
+              {t(`nav.${tab}`)}
+            </h1>
+            <p className="truncate text-xs text-slate-400">{settings.clubName}</p>
+          </div>
+          <SyncBadge />
+        </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pb-20">
+      {!online && (
+        <p className="bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-700">
+          {t('sync.offlineBanner')}
+        </p>
+      )}
+
+      <main className="flex-1 overflow-y-auto pb-24">
         {tab === 'attendance' && <AttendanceScreen />}
         {tab === 'payments' && <PaymentsScreen />}
         {tab === 'roster' && <RosterScreen />}
@@ -36,20 +60,31 @@ export default function CoachApp() {
         {tab === 'settings' && <SettingsScreen />}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 mx-auto flex max-w-md border-t bg-white">
-        {TABS.map((tb) => (
-          <button
-            key={tb.key}
-            onClick={() => setTab(tb.key)}
-            className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-xs ${
-              tab === tb.key ? 'text-brand-600' : 'text-slate-400'
-            }`}
-          >
-            <span className="text-lg leading-none">{tb.icon}</span>
-            {t(`nav.${tb.key}`)}
-          </button>
-        ))}
+      <nav
+        aria-label={t('nav.attendance')}
+        className="fixed inset-x-0 bottom-0 z-10 mx-auto max-w-md border-t border-slate-200 bg-white/95 pb-safe backdrop-blur"
+      >
+        <div className="flex">
+          {TABS.map(({ key, Icon }) => {
+            const current = tab === key
+            return (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                aria-current={current ? 'page' : undefined}
+                className={`flex min-h-[56px] flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
+                  current ? 'text-brand-600' : 'text-slate-400'
+                }`}
+              >
+                <Icon className={`h-6 w-6 ${current ? '' : 'opacity-80'}`} />
+                {t(`nav.${key}`)}
+              </button>
+            )
+          })}
+        </div>
       </nav>
+
+      <Toaster />
     </div>
   )
 }

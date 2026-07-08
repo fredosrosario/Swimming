@@ -1,7 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { store } from '../../lib/store'
 import { useAppState } from '../../lib/useStore'
+import LanguageToggle from '../../components/LanguageToggle'
+import { toast } from '../../components/ui'
+import { CopyIcon, DownloadIcon, ShareIcon } from '../../components/icons'
 
 export default function SettingsScreen() {
   const { t } = useTranslation()
@@ -9,13 +12,29 @@ export default function SettingsScreen() {
   // Absolute link to this deployment's index, with a hash route appended
   // (HashRouter → works on GitHub Pages without server rewrites).
   const base =
-    typeof window !== 'undefined'
-      ? window.location.origin + window.location.pathname
-      : ''
+    typeof window !== 'undefined' ? window.location.origin + window.location.pathname : ''
+
+  function exportBackup() {
+    const data = JSON.stringify(store.getState(), null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `kapok-backup-${store.today()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="flex flex-col gap-4 p-3">
-      <section className="rounded-xl bg-white p-3 shadow-sm">
+      <Section title={t('settings.club')}>
+        <Field label={t('settings.clubName')}>
+          <input
+            value={settings.clubName}
+            onChange={(e) => store.updateSettings({ clubName: e.target.value })}
+            className="input"
+          />
+        </Field>
         <Field label={t('settings.venue')}>
           <input
             value={settings.venueName}
@@ -23,53 +42,82 @@ export default function SettingsScreen() {
             className="input"
           />
         </Field>
-        <Field label={t('settings.price')}>
-          <input
-            type="number"
-            inputMode="numeric"
-            value={settings.sessionPrice}
-            onChange={(e) => store.updateSettings({ sessionPrice: Number(e.target.value) || 0 })}
-            className="input"
-          />
-        </Field>
-        <Field label={t('settings.currency')}>
-          <input
-            value={settings.currencyLabel}
-            onChange={(e) => store.updateSettings({ currencyLabel: e.target.value })}
-            className="input"
-          />
-        </Field>
-      </section>
-
-      <section className="rounded-xl bg-white p-3 shadow-sm">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          {t('settings.links')}
+        <div className="flex gap-3">
+          <Field label={t('settings.price')} className="flex-1">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              value={settings.sessionPrice}
+              onChange={(e) => store.updateSettings({ sessionPrice: Number(e.target.value) || 0 })}
+              className="input"
+            />
+          </Field>
+          <Field label={t('settings.currency')} className="flex-1">
+            <input
+              value={settings.currencyLabel}
+              onChange={(e) => store.updateSettings({ currencyLabel: e.target.value })}
+              className="input"
+            />
+          </Field>
         </div>
-        <LinkRow
-          label={t('settings.coachLink')}
-          url={`${base}#/c/${settings.coachToken}`}
-          onRotate={() => {
-            if (confirm(t('settings.rotateWarn'))) store.rotateToken('coachToken')
-          }}
-        />
+      </Section>
+
+      <Section title={t('settings.links')}>
+        <p className="mb-3 text-xs leading-relaxed text-slate-400">{t('settings.linksHint')}</p>
+        {settings.coachToken && (
+          <LinkRow
+            label={t('settings.coachLink')}
+            url={`${base}#/c/${settings.coachToken}`}
+            onRotate={() => {
+              if (confirm(t('settings.rotateWarn'))) void store.rotateToken('coachToken')
+            }}
+          />
+        )}
         <LinkRow
           label={t('settings.parentLink')}
           url={`${base}#/p/${settings.parentToken}`}
           onRotate={() => {
-            if (confirm(t('settings.rotateWarn'))) store.rotateToken('parentToken')
+            if (confirm(t('settings.rotateWarn'))) void store.rotateToken('parentToken')
           }}
         />
-      </section>
+      </Section>
 
-      <style>{`.input{width:100%;border:1px solid #e2e8f0;border-radius:0.75rem;padding:0.5rem 0.75rem;outline:none}
-        .input:focus{border-color:#38bdf8}`}</style>
+      <Section title={t('settings.language')}>
+        <LanguageToggle />
+      </Section>
+
+      <Section title={t('settings.data')}>
+        <button onClick={exportBackup} className="btn-secondary w-full">
+          <DownloadIcon className="h-5 w-5" />
+          {t('settings.export')}
+        </button>
+        <p className="mt-2 text-xs text-slate-400">{t('settings.exportHint')}</p>
+      </Section>
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <label className="mb-3 block">
+    <section className="card p-4">
+      <h2 className="section-label mb-3">{title}</h2>
+      {children}
+    </section>
+  )
+}
+
+function Field({
+  label,
+  children,
+  className = '',
+}: {
+  label: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <label className={`mb-3 block ${className}`}>
       <span className="mb-1 block text-sm text-slate-500">{label}</span>
       {children}
     </label>
@@ -78,25 +126,47 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function LinkRow({ label, url, onRotate }: { label: string; url: string; onRotate: () => void }) {
   const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
+  const canShare = typeof navigator !== 'undefined' && 'share' in navigator
+
   async function copy() {
     try {
       await navigator.clipboard.writeText(url)
+      toast(t('common.copied'))
     } catch {
       /* ignore */
     }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
   }
+
+  async function share() {
+    try {
+      await navigator.share({ url })
+    } catch {
+      /* user cancelled */
+    }
+  }
+
   return (
-    <div className="mb-3">
-      <div className="mb-1 text-sm text-slate-600">{label}</div>
-      <div className="truncate rounded-lg bg-slate-50 px-2 py-1 text-xs text-slate-500">{url}</div>
-      <div className="mt-1 flex gap-3">
-        <button onClick={copy} className="text-sm font-medium text-brand-600">
-          {copied ? t('common.copied') : t('settings.copyLink')}
+    <div className="mb-4 last:mb-0">
+      <div className="mb-1 text-sm font-medium text-slate-600">{label}</div>
+      <div className="truncate rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-500">
+        {url}
+      </div>
+      <div className="mt-1.5 flex gap-2">
+        <button onClick={copy} className="btn-secondary !min-h-[36px] gap-1 !px-3 text-sm">
+          <CopyIcon className="h-4 w-4" />
+          {t('settings.copyLink')}
         </button>
-        <button onClick={onRotate} className="text-sm font-medium text-rose-500">
+        {canShare && (
+          <button onClick={share} className="btn-secondary !min-h-[36px] gap-1 !px-3 text-sm">
+            <ShareIcon className="h-4 w-4" />
+            {t('settings.shareLink')}
+          </button>
+        )}
+        <span className="flex-1" />
+        <button
+          onClick={onRotate}
+          className="btn-danger !min-h-[36px] !px-3 text-sm"
+        >
           {t('settings.rotate')}
         </button>
       </div>

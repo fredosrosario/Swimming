@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppState } from '../lib/useStore'
 import { store } from '../lib/store'
 import LanguageToggle from '../components/LanguageToggle'
+import { ChevronRightIcon, WaveMark } from '../components/icons'
 
 export default function Home() {
   const { t } = useTranslation()
@@ -11,37 +12,48 @@ export default function Home() {
   // link the server accepted — never offer a button that will be rejected.
   const hasCoach = !!settings.coachToken
   const hasParent = !!settings.parentToken
+
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center gap-6 p-6">
-      <div className="text-center">
-        <div className="text-4xl">🏊</div>
-        <h1 className="mt-2 text-xl font-bold text-slate-800">{t('home.title')}</h1>
+    <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center gap-8 p-6">
+      <div className="flex flex-col items-center text-center">
+        <WaveMark className="h-16 w-16" />
+        <h1 className="mt-4 text-xl font-bold text-slate-800">{t('home.title')}</h1>
         <p className="mt-1 text-slate-500">{t('home.subtitle')}</p>
       </div>
+
       <div className="flex w-full flex-col gap-3">
         {hasCoach && (
-          <Link
-            to={`/c/${settings.coachToken}`}
-            className="rounded-xl bg-brand-600 px-4 py-3 text-center font-semibold text-white shadow-sm active:bg-brand-700"
-          >
-            {t('home.openCoach')}
+          <Link to={`/c/${settings.coachToken}`} className="card flex items-center gap-3 p-4">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-xl text-white">
+              ✓
+            </span>
+            <span className="flex-1">
+              <span className="block font-semibold text-slate-800">{t('home.openCoach')}</span>
+              <span className="block text-sm text-slate-400">{t('home.openCoachHint')}</span>
+            </span>
+            <ChevronRightIcon className="h-5 w-5 text-slate-300" />
           </Link>
         )}
         {hasParent && (
-          <Link
-            to={`/p/${settings.parentToken}`}
-            className="rounded-xl bg-white px-4 py-3 text-center font-semibold text-brand-700 shadow-sm ring-1 ring-brand-200 active:bg-brand-50"
-          >
-            {t('home.openParent')}
+          <Link to={`/p/${settings.parentToken}`} className="card flex items-center gap-3 p-4">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-xl">
+              👀
+            </span>
+            <span className="flex-1">
+              <span className="block font-semibold text-slate-800">{t('home.openParent')}</span>
+              <span className="block text-sm text-slate-400">{t('home.openParentHint')}</span>
+            </span>
+            <ChevronRightIcon className="h-5 w-5 text-slate-300" />
           </Link>
         )}
         {!hasCoach && !hasParent && (
-          <p className="rounded-xl bg-amber-50 px-4 py-3 text-center text-sm text-amber-700 ring-1 ring-amber-200">
+          <p className="rounded-2xl bg-amber-50 px-4 py-4 text-center text-sm leading-relaxed text-amber-700 ring-1 ring-amber-200">
             {t('home.needLink')}
           </p>
         )}
       </div>
-      {store.isRemote() ? null : (
+
+      {!store.isRemote() && (
         <p className="text-center text-xs text-slate-400">{t('home.note')}</p>
       )}
       <LanguageToggle />
