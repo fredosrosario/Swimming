@@ -66,6 +66,13 @@ export default function SettingsScreen() {
 
       <Section title={t('settings.links')}>
         <p className="mb-3 text-xs leading-relaxed text-slate-400">{t('settings.linksHint')}</p>
+        <LinkRow
+          label={t('settings.parentLink')}
+          url={`${base}#/p/${settings.parentToken}`}
+          onRotate={() => {
+            if (confirm(t('settings.rotateWarn'))) void store.rotateToken('parentToken')
+          }}
+        />
         {settings.coachToken && (
           <LinkRow
             label={t('settings.coachLink')}
@@ -75,13 +82,6 @@ export default function SettingsScreen() {
             }}
           />
         )}
-        <LinkRow
-          label={t('settings.parentLink')}
-          url={`${base}#/p/${settings.parentToken}`}
-          onRotate={() => {
-            if (confirm(t('settings.rotateWarn'))) void store.rotateToken('parentToken')
-          }}
-        />
       </Section>
 
       <Section title={t('settings.recovery')}>

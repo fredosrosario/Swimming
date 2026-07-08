@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { store } from '../lib/store'
 import { useAppState } from '../lib/useStore'
@@ -14,7 +15,7 @@ import { addMonths, formatDateLabel, formatMonthTitle } from '../lib/dates'
 import type { Swimmer } from '../lib/types'
 import LanguageToggle from '../components/LanguageToggle'
 import { Avatar, EmptyState, Sheet, Stepper } from '../components/ui'
-import { ChevronRightIcon, SearchIcon, XIcon } from '../components/icons'
+import { ChevronRightIcon, KeyIcon, SearchIcon, XIcon } from '../components/icons'
 
 export default function ParentApp() {
   const { t, i18n } = useTranslation()
@@ -22,6 +23,7 @@ export default function ParentApp() {
   const [month, setMonth] = useState(() => store.today().slice(0, 7))
   const [query, setQuery] = useState('')
   const [openFor, setOpenFor] = useState<Swimmer | null>(null)
+  const [coachLoginOpen, setCoachLoginOpen] = useState(false)
   const currency = state.settings.currencyLabel
 
   const rows = useMemo(() => {
@@ -45,7 +47,16 @@ export default function ParentApp() {
             <h1 className="truncate text-base font-bold">{state.settings.clubName}</h1>
             <p className="truncate text-xs text-brand-100">{t('parent.readonly')}</p>
           </div>
-          <LanguageToggle onDark />
+          <div className="flex shrink-0 items-center gap-1">
+            <LanguageToggle onDark />
+            <button
+              onClick={() => setCoachLoginOpen(true)}
+              aria-label={t('parent.coachLogin')}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white active:bg-white/25"
+            >
+              <KeyIcon className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -125,7 +136,68 @@ export default function ParentApp() {
       {openFor && (
         <SwimmerDetailSheet swimmer={openFor} month={month} onClose={() => setOpenFor(null)} />
       )}
+      {coachLoginOpen && <CoachLoginSheet onClose={() => setCoachLoginOpen(false)} />}
     </div>
+  )
+}
+
+/**
+ * The single shared URL lands everyone here (read-only). A coach unlocks edit
+ * mode with the PIN, which trades for the coach token and opens the coach view.
+ */
+function CoachLoginSheet({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const [pin, setPin] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<'wrong' | 'network' | null>(null)
+
+  async function unlock() {
+    if (!pin.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await store.recover(pin)
+      if (result) navigate(`/c/${result.coachToken}`)
+      else setError('wrong')
+    } catch {
+      setError('network')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet title={t('parent.coachLoginTitle')} onClose={onClose}>
+      <p className="mb-3 text-sm text-slate-500">{t('parent.coachLoginPrompt')}</p>
+      <input
+        type="password"
+        inputMode="numeric"
+        autoComplete="off"
+        autoFocus
+        value={pin}
+        onChange={(e) => {
+          setPin(e.target.value)
+          setError(null)
+        }}
+        onKeyDown={(e) => e.key === 'Enter' && unlock()}
+        placeholder={t('home.recoverPinPlaceholder')}
+        aria-label={t('home.recoverPinPlaceholder')}
+        className="input text-lg tracking-[0.3em]"
+      />
+      {error === 'wrong' && <p className="mt-2 text-sm text-rose-600">{t('home.recoverWrong')}</p>}
+      {error === 'network' && (
+        <p className="mt-2 text-sm text-rose-600">{t('home.recoverError')}</p>
+      )}
+      <div className="mt-4 flex gap-2">
+        <button onClick={onClose} className="btn-secondary flex-1">
+          {t('common.cancel')}
+        </button>
+        <button onClick={unlock} disabled={!pin.trim() || busy} className="btn-primary flex-1">
+          {t('home.recoverUnlock')}
+        </button>
+      </div>
+    </Sheet>
   )
 }
 
