@@ -19,7 +19,9 @@ export default defineConfig({
         theme_color: '#0ea5e9',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/',
+        // Relative, like `base`: the app lives under /<repo>/ on GitHub Pages.
+        start_url: './',
+        scope: './',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },

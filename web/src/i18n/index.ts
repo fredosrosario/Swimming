@@ -100,6 +100,7 @@ const zhHant = {
       openCoach: '教練檢視',
       openParent: '家長檢視',
       note: '（此頁只在本機顯示，正式使用時請直接分享下方連結）',
+      needLink: '此裝置尚未連結，請開啟教練分享給你的專屬連結。',
     },
   },
 }
@@ -201,6 +202,7 @@ const en = {
       openCoach: 'Coach view',
       openParent: 'Parent view',
       note: '(This page is local only — in real use, share the links below directly.)',
+      needLink: 'This device is not linked yet — open the link the coach shared with you.',
     },
   },
 }

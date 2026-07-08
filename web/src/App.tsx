@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import { store } from './lib/store'
-import { useAppState } from './lib/useStore'
+import { useAppState, useSyncStatus } from './lib/useStore'
 import CoachApp from './routes/CoachApp'
 import ParentApp from './routes/ParentApp'
 import InvalidLink from './routes/InvalidLink'
@@ -15,25 +15,39 @@ function Loading() {
   )
 }
 
-function CoachGuard() {
+/**
+ * In remote mode the SERVER decides what a token unlocks (the local cache may
+ * hold stale or never-validated tokens); locally we compare against settings.
+ * A coach token also opens the read-only parent view.
+ */
+function useGuard(kind: 'coach' | 'parent'): 'loading' | 'ok' | 'invalid' {
   const { token } = useParams()
   const { settings } = useAppState()
+  const sync = useSyncStatus()
   useEffect(() => {
-    if (token) store.connect(token)
+    if (token) void store.connect(token)
   }, [token])
-  if (store.isRemote() && !store.isLoaded()) return <Loading />
-  if (token !== settings.coachToken) return <InvalidLink />
+  if (store.isRemote()) {
+    if (!sync.loaded) return 'loading'
+    if (sync.rejected) return 'invalid'
+    if (kind === 'coach') return sync.role === 'coach' ? 'ok' : 'invalid'
+    return sync.role !== null ? 'ok' : 'invalid'
+  }
+  const expected = kind === 'coach' ? settings.coachToken : settings.parentToken
+  return token && token === expected ? 'ok' : 'invalid'
+}
+
+function CoachGuard() {
+  const verdict = useGuard('coach')
+  if (verdict === 'loading') return <Loading />
+  if (verdict === 'invalid') return <InvalidLink />
   return <CoachApp />
 }
 
 function ParentGuard() {
-  const { token } = useParams()
-  const { settings } = useAppState()
-  useEffect(() => {
-    if (token) store.connect(token)
-  }, [token])
-  if (store.isRemote() && !store.isLoaded()) return <Loading />
-  if (token !== settings.parentToken) return <InvalidLink />
+  const verdict = useGuard('parent')
+  if (verdict === 'loading') return <Loading />
+  if (verdict === 'invalid') return <InvalidLink />
   return <ParentApp />
 }
 

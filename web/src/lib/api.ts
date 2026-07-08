@@ -7,13 +7,22 @@ const BASE = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? ''
 export const REMOTE_ENABLED = BASE.length > 0
 const ENDPOINT = REMOTE_ENABLED ? `${BASE.replace(/\/+$/, '')}/functions/v1/api` : ''
 
+/** Non-2xx response. `status === 403` means the capability token was rejected. */
+export class ApiError extends Error {
+  status: number
+  constructor(method: string, status: number) {
+    super(`api ${method} → ${status}`)
+    this.status = status
+  }
+}
+
 async function call(method: 'GET' | 'POST', token: string, body?: AppState): Promise<Response> {
   const res = await fetch(`${ENDPOINT}?token=${encodeURIComponent(token)}`, {
     method,
     headers: { 'content-type': 'application/json', 'x-app-token': token },
     body: body ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) throw new Error(`api ${method} → ${res.status}`)
+  if (!res.ok) throw new ApiError(method, res.status)
   return res
 }
 

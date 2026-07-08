@@ -59,7 +59,19 @@ Deno.serve(async (req) => {
 
   if (req.method === 'POST') {
     if (!isCoach) return json({ error: 'forbidden' }, 403)
-    const body = await req.json()
+    let body: any
+    try {
+      body = await req.json()
+    } catch {
+      return json({ error: 'bad_json' }, 400)
+    }
+    // Never accept a doc that would corrupt the schema or erase the
+    // capability tokens (which would lock everyone out permanently).
+    const valid = body &&
+      typeof body.settings?.coachToken === 'string' && body.settings.coachToken.length > 0 &&
+      typeof body.settings?.parentToken === 'string' && body.settings.parentToken.length > 0 &&
+      Array.isArray(body.swimmers) && Array.isArray(body.attendance) && Array.isArray(body.payments)
+    if (!valid) return json({ error: 'bad_state' }, 400)
     await admin
       .from('app_state')
       .update({ data: body, updated_at: new Date().toISOString() })

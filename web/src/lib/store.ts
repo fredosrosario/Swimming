@@ -1,9 +1,10 @@
 import type { AppState, Payment, Settings, Swimmer } from './types'
 import { todayInTz } from './dates'
-import { REMOTE_ENABLED, fetchRemoteState, pushRemoteState } from './api'
+import { REMOTE_ENABLED, ApiError, fetchRemoteState, pushRemoteState } from './api'
 
 const STORAGE_KEY = 'kapok-swim-club/v1'
 const PUSH_DEBOUNCE_MS = 600
+const PUSH_RETRY_MS = 5000
 const POLL_INTERVAL_MS = 8000
 
 /** Initial roster seeded on first run (order = sortOrder), all at zero balance. */
@@ -34,8 +35,11 @@ function seedState(): AppState {
     venueName: '英才',
     sessionPrice: 15,
     currencyLabel: '元',
-    coachToken: token(),
-    parentToken: token(),
+    // In remote mode the real tokens live in the shared database; a fresh
+    // device learns them from the link it opens — it must never invent its
+    // own, or its Home-page links point at tokens the server rejects.
+    coachToken: REMOTE_ENABLED ? '' : token(),
+    parentToken: REMOTE_ENABLED ? '' : token(),
     timezone: 'Asia/Macau',
   }
   const swimmers: Swimmer[] = SEED_NAMES.map((displayName, i) => ({
@@ -71,18 +75,36 @@ function persist(state: AppState): void {
 
 type Listener = () => void
 
+export type SyncRole = 'coach' | 'parent' | null
+
+export interface SyncStatus {
+  /** First remote fetch (or failure) has settled; safe to render a screen. */
+  loaded: boolean
+  /** What the connected token unlocked. 'coach' = can edit. */
+  role: SyncRole
+  /** Server explicitly rejected the token (403) — the link is invalid. */
+  rejected: boolean
+}
+
 class Store {
   private state: AppState = load()
   private listeners = new Set<Listener>()
 
   // Remote sync state (only used when REMOTE_ENABLED).
   private token: string | null = null
-  private loaded = !REMOTE_ENABLED // local-only mode is "loaded" from localStorage
-  private canWrite = !REMOTE_ENABLED // local-only mode: always writable
+  private sync: SyncStatus = {
+    loaded: !REMOTE_ENABLED, // local-only mode is "loaded" from localStorage
+    role: REMOTE_ENABLED ? null : 'coach', // local-only mode: always writable
+    rejected: false,
+  }
+  private connecting: Promise<void> | null = null
   private pushTimer: ReturnType<typeof setTimeout> | null = null
+  private pushInFlight = false
   private polling = false
 
   getState = (): AppState => this.state
+  /** Stable snapshot object — replaced only when a field actually changes. */
+  getSync = (): SyncStatus => this.sync
   subscribe = (l: Listener): (() => void) => {
     this.listeners.add(l)
     return () => this.listeners.delete(l)
@@ -91,12 +113,27 @@ class Store {
   isRemote(): boolean {
     return REMOTE_ENABLED
   }
-  isLoaded(): boolean {
-    return this.loaded
-  }
 
   private notify() {
     this.listeners.forEach((l) => l())
+  }
+
+  private setSync(patch: Partial<SyncStatus>) {
+    const next = { ...this.sync, ...patch }
+    if (
+      next.loaded === this.sync.loaded &&
+      next.role === this.sync.role &&
+      next.rejected === this.sync.rejected
+    )
+      return
+    this.sync = next
+    this.notify()
+  }
+
+  private roleFor(state: AppState, tok: string): SyncRole {
+    if (tok && tok === state.settings.coachToken) return 'coach'
+    if (tok && tok === state.settings.parentToken) return 'parent'
+    return null
   }
 
   /**
@@ -107,60 +144,138 @@ class Store {
     this.state = next
     persist(next)
     this.notify()
-    if (REMOTE_ENABLED && this.canWrite && this.token) this.schedulePush()
+    if (REMOTE_ENABLED && this.sync.role === 'coach' && this.token) this.schedulePush()
   }
 
-  private schedulePush() {
-    if (this.pushTimer) clearTimeout(this.pushTimer)
-    this.pushTimer = setTimeout(() => {
-      this.pushTimer = null
-      const tok = this.token
-      if (!tok) return
-      pushRemoteState(tok, this.state).catch((e) => console.error('remote push failed', e))
-    }, PUSH_DEBOUNCE_MS)
+  /** Adopt a server copy — unless local edits are still waiting to be pushed. */
+  private adoptRemote(remote: AppState) {
+    if (this.pushTimer !== null || this.pushInFlight) return
+    // Parent payloads arrive with coachToken stripped; keep any coach token
+    // this device already knows so a coach can browse the parent view without
+    // wiping their own cached credentials.
+    const merged: AppState = {
+      ...remote,
+      settings: {
+        ...remote.settings,
+        coachToken: remote.settings.coachToken ?? this.state.settings.coachToken ?? '',
+      },
+    }
+    if (JSON.stringify(merged) === JSON.stringify(this.state)) return
+    this.state = merged
+    persist(merged)
+    this.notify()
+  }
+
+  /** A 403 proves the token is dead — drop any cached copy of it so the Home
+   *  page stops offering links that the server will reject. */
+  private forgetRejectedToken(tok: string) {
+    const s = this.state.settings
+    if (s.coachToken !== tok && s.parentToken !== tok) return
+    this.state = {
+      ...this.state,
+      settings: {
+        ...s,
+        coachToken: s.coachToken === tok ? '' : s.coachToken,
+        parentToken: s.parentToken === tok ? '' : s.parentToken,
+      },
+    }
+    persist(this.state)
+    this.notify()
   }
 
   /**
    * Called by the route guards once the URL token is known. Fetches the shared
    * state from the server; the coach (whose token matches) becomes writable,
-   * parents stay read-only and poll for the coach's updates.
+   * everyone polls for updates.
    */
-  async connect(token: string) {
+  connect(tok: string): Promise<void> | undefined {
     if (!REMOTE_ENABLED) return
-    if (this.token === token && this.loaded) return
-    this.token = token
-    try {
-      const remote = await fetchRemoteState(token)
-      this.canWrite = remote.settings.coachToken === token
-      this.state = remote
-      persist(remote)
-    } catch (e) {
-      console.error('remote connect failed', e)
-      // Fall back to whatever is cached; guard will validate the token.
-    } finally {
-      this.loaded = true
-      this.notify()
-      if (!this.canWrite) this.startPolling()
-    }
+    if (this.token === tok && (this.connecting || this.sync.loaded))
+      return this.connecting ?? undefined
+    if (this.token !== tok) this.setSync({ loaded: false, role: null, rejected: false })
+    this.token = tok
+    this.connecting = (async () => {
+      try {
+        const remote = await fetchRemoteState(tok)
+        this.adoptRemote(remote)
+        this.setSync({ loaded: true, rejected: false, role: this.roleFor(remote, tok) })
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 403) {
+          this.forgetRejectedToken(tok)
+          this.setSync({ loaded: true, rejected: true, role: null })
+        } else {
+          // Offline / transient failure: fall back to the cached copy and let
+          // the poller keep retrying in the background.
+          console.error('remote connect failed', e)
+          this.setSync({ loaded: true, rejected: false, role: this.roleFor(this.state, tok) })
+        }
+      } finally {
+        this.connecting = null
+        if (!this.sync.rejected) this.startPolling()
+      }
+    })()
+    return this.connecting
   }
 
   private startPolling() {
     if (this.polling || !REMOTE_ENABLED) return
     this.polling = true
     const tick = async () => {
-      if (this.token && !this.canWrite) {
+      const tok = this.token
+      const busy = this.pushTimer !== null || this.pushInFlight
+      const hidden = typeof document !== 'undefined' && document.hidden
+      if (tok && !busy && !hidden) {
         try {
-          const remote = await fetchRemoteState(this.token)
-          this.state = remote
-          persist(remote)
-          this.notify()
-        } catch {
+          const remote = await fetchRemoteState(tok)
+          this.adoptRemote(remote)
+          this.setSync({ rejected: false, role: this.roleFor(remote, tok) })
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 403) {
+            // The link was reset while we were connected.
+            this.forgetRejectedToken(tok)
+            this.setSync({ rejected: true, role: null })
+            this.polling = false
+            return
+          }
           /* transient; try again next interval */
         }
       }
       setTimeout(tick, POLL_INTERVAL_MS)
     }
     setTimeout(tick, POLL_INTERVAL_MS)
+  }
+
+  private schedulePush(delay = PUSH_DEBOUNCE_MS) {
+    if (this.pushTimer) clearTimeout(this.pushTimer)
+    this.pushTimer = setTimeout(() => {
+      this.pushTimer = null
+      void this.pushNow()
+    }, delay)
+  }
+
+  private async pushNow() {
+    const tok = this.token
+    if (!tok) return
+    if (this.pushInFlight) {
+      this.schedulePush()
+      return
+    }
+    this.pushInFlight = true
+    try {
+      await pushRemoteState(tok, this.state)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 403) {
+        this.forgetRejectedToken(tok)
+        this.setSync({ rejected: true, role: null })
+      } else {
+        // Offline / transient failure: never drop the edit — retry until the
+        // push lands.
+        console.error('remote push failed; will retry', e)
+        this.schedulePush(PUSH_RETRY_MS)
+      }
+    } finally {
+      this.pushInFlight = false
+    }
   }
 
   today(): string {
@@ -268,8 +383,33 @@ class Store {
     this.commit({ ...this.state, settings: { ...this.state.settings, ...patch } })
   }
 
-  rotateToken(which: 'coachToken' | 'parentToken') {
-    this.updateSettings({ [which]: token() } as Partial<Settings>)
+  /**
+   * Rotating a token must be pushed while the CURRENT session token is still
+   * valid on the server; only then does the coach session adopt the new one.
+   * (A debounced push could otherwise race and lock the coach out.)
+   */
+  async rotateToken(which: 'coachToken' | 'parentToken') {
+    const fresh = token()
+    const sessionToken = this.token
+    const next: AppState = {
+      ...this.state,
+      settings: { ...this.state.settings, [which]: fresh },
+    }
+    this.state = next
+    persist(next)
+    this.notify()
+    if (!(REMOTE_ENABLED && this.sync.role === 'coach' && sessionToken)) return
+    if (this.pushTimer) {
+      clearTimeout(this.pushTimer)
+      this.pushTimer = null
+    }
+    try {
+      await pushRemoteState(sessionToken, next)
+      if (which === 'coachToken') this.token = fresh
+    } catch (e) {
+      console.error('token rotation push failed; will retry', e)
+      this.schedulePush(PUSH_RETRY_MS)
+    }
   }
 }
 
