@@ -41,12 +41,6 @@ function ParentTokenRoute() {
   return <ParentRoute token={token} />
 }
 
-/** The shared base URL. Remote: public read-only view. Local dev: role chooser. */
-function RootRoute() {
-  if (!store.isRemote()) return <Home />
-  return <ParentRoute />
-}
-
 /**
  * Coach view — the server decides ('coach' only for the exact coach token,
  * which a device only obtains through the PIN login). Any other token resolves
@@ -70,7 +64,8 @@ function CoachGuard() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<RootRoute />} />
+      <Route path="/" element={<Home />} />
+      <Route path="/parent" element={<ParentRoute />} />
       <Route path="/c/:token" element={<CoachGuard />} />
       <Route path="/p/:token" element={<ParentTokenRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />

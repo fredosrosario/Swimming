@@ -1,17 +1,13 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useAppState } from '../lib/useStore'
-import { store } from '../lib/store'
 import LanguageToggle from '../components/LanguageToggle'
-import { ChevronRightIcon, WaveMark } from '../components/icons'
+import CoachLoginSheet from '../components/CoachLoginSheet'
+import { ChevronRightIcon, LockIcon, WaveMark } from '../components/icons'
 
 export default function Home() {
   const { t } = useTranslation()
-  const { settings } = useAppState()
-  // In remote mode a token is only present once this device has opened a
-  // link the server accepted — never offer a button that will be rejected.
-  const hasCoach = !!settings.coachToken
-  const hasParent = !!settings.parentToken
+  const [coachLoginOpen, setCoachLoginOpen] = useState(false)
 
   return (
     <div className="min-h-full bg-gradient-to-b from-brand-700 via-brand-600 to-brand-400">
@@ -23,42 +19,38 @@ export default function Home() {
         </div>
 
         <div className="flex w-full flex-col gap-3">
-          {hasParent && (
-            <Link to={`/p/${settings.parentToken}`} className="card flex items-center gap-3 p-4">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-xl">
-                👀
-              </span>
-              <span className="flex-1">
-                <span className="block font-semibold text-slate-800">{t('home.openParent')}</span>
-                <span className="block text-sm text-slate-400">{t('home.openParentHint')}</span>
-              </span>
-              <ChevronRightIcon className="h-5 w-5 text-slate-300" />
-            </Link>
-          )}
-          {hasCoach && (
-            <Link to={`/c/${settings.coachToken}`} className="card flex items-center gap-3 p-4">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-xl text-white">
-                ✓
-              </span>
-              <span className="flex-1">
-                <span className="block font-semibold text-slate-800">{t('home.openCoach')}</span>
-                <span className="block text-sm text-slate-400">{t('home.openCoachHint')}</span>
-              </span>
-              <ChevronRightIcon className="h-5 w-5 text-slate-300" />
-            </Link>
-          )}
-          {!hasCoach && !hasParent && (
-            <p className="rounded-2xl bg-white/95 px-4 py-4 text-center text-sm leading-relaxed text-slate-700 shadow-sm">
-              {t('home.needLink')}
-            </p>
-          )}
+          {/* Parent: read-only, open to everyone. */}
+          <Link to="/parent" className="card flex items-center gap-3 p-4">
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-xl">
+              👀
+            </span>
+            <span className="flex-1">
+              <span className="block font-semibold text-slate-800">{t('home.openParent')}</span>
+              <span className="block text-sm text-slate-400">{t('home.openParentHint')}</span>
+            </span>
+            <ChevronRightIcon className="h-5 w-5 text-slate-300" />
+          </Link>
+
+          {/* Coach: edit access, gated by the PIN. */}
+          <button
+            onClick={() => setCoachLoginOpen(true)}
+            className="card flex items-center gap-3 p-4 text-left"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-xl text-white">
+              ✓
+            </span>
+            <span className="flex-1">
+              <span className="block font-semibold text-slate-800">{t('home.openCoach')}</span>
+              <span className="block text-sm text-slate-400">{t('home.openCoachHint')}</span>
+            </span>
+            <LockIcon className="h-4 w-4 text-slate-300" />
+          </button>
         </div>
 
-        {!store.isRemote() && (
-          <p className="text-center text-xs text-brand-100">{t('home.note')}</p>
-        )}
         <LanguageToggle onDark />
       </div>
+
+      {coachLoginOpen && <CoachLoginSheet onClose={() => setCoachLoginOpen(false)} />}
     </div>
   )
 }
