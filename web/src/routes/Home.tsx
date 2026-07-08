@@ -14,12 +14,13 @@ export default function Home() {
   const hasParent = !!settings.parentToken
 
   return (
-    <div className="mx-auto flex min-h-full max-w-md flex-col items-center justify-center gap-8 p-6">
-      <div className="flex flex-col items-center text-center">
-        <WaveMark className="h-16 w-16" />
-        <h1 className="mt-4 text-xl font-bold text-slate-800">{t('home.title')}</h1>
-        <p className="mt-1 text-slate-500">{t('home.subtitle')}</p>
-      </div>
+    <div className="min-h-full bg-gradient-to-b from-brand-700 via-brand-600 to-brand-400">
+      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-8 p-6">
+        <div className="flex flex-col items-center text-center">
+          <WaveMark className="h-16 w-16 drop-shadow-lg" />
+          <h1 className="mt-4 text-xl font-bold text-white">{t('home.title')}</h1>
+          <p className="mt-1 text-brand-100">{t('home.subtitle')}</p>
+        </div>
 
       <div className="flex w-full flex-col gap-3">
         {hasCoach && (
@@ -46,17 +47,18 @@ export default function Home() {
             <ChevronRightIcon className="h-5 w-5 text-slate-300" />
           </Link>
         )}
-        {!hasCoach && !hasParent && (
-          <p className="rounded-2xl bg-amber-50 px-4 py-4 text-center text-sm leading-relaxed text-amber-700 ring-1 ring-amber-200">
-            {t('home.needLink')}
-          </p>
-        )}
-      </div>
+          {!hasCoach && !hasParent && (
+            <p className="rounded-2xl bg-white/95 px-4 py-4 text-center text-sm leading-relaxed text-slate-700 shadow-sm">
+              {t('home.needLink')}
+            </p>
+          )}
+        </div>
 
-      {!store.isRemote() && (
-        <p className="text-center text-xs text-slate-400">{t('home.note')}</p>
-      )}
-      <LanguageToggle />
+        {!store.isRemote() && (
+          <p className="text-center text-xs text-brand-100">{t('home.note')}</p>
+        )}
+        <LanguageToggle onDark />
+      </div>
     </div>
   )
 }

@@ -103,7 +103,10 @@ export default function AttendanceScreen() {
           ) : (
             <span className="chip bg-slate-100 text-slate-500 !py-1.5">{t('common.today')}</span>
           )}
-          <span className="chip bg-brand-600 text-sm text-white !py-1.5">
+          <span
+            key={`${present.length}-${collected}`}
+            className="chip bg-brand-600 text-sm text-white !py-1.5 animate-pop-in"
+          >
             {t('attendance.headcount', { count: present.length })}
             {present.length > 0 && (
               <span className="font-normal text-brand-100">
@@ -264,8 +267,13 @@ function SwimmerRow({
         ) : (
           <Avatar name={swimmer.displayName} />
         )}
-        <span className="flex-1 truncate text-base font-medium text-slate-800">
-          {swimmer.displayName}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-base font-medium text-slate-800">
+            {swimmer.displayName}
+          </span>
+          {swimmer.note && (
+            <span className="block truncate text-xs text-slate-400">{swimmer.note}</span>
+          )}
         </span>
       </button>
       {present && (

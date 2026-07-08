@@ -17,6 +17,8 @@ export interface Settings {
 export interface Swimmer {
   id: string
   displayName: string
+  /** Coach-only free text, e.g. "兄妹9折" or "試堂". */
+  note?: string
   active: boolean
   sortOrder: number
   createdAt: string

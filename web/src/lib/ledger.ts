@@ -111,6 +111,48 @@ export function monthlyOwing(state: AppState, asOfMonth: string): OwingRow[] {
     .filter((r) => r.total > 0)
 }
 
+export interface MonthStats {
+  /** Distinct dates in the month with at least one check-in. */
+  sessionDays: number
+  /** Total check-ins (attendance records) in the month. */
+  checkIns: number
+  /** Payments received during the month. */
+  collected: number
+  /** Outstanding across everyone as of the end of the month. */
+  outstanding: number
+}
+
+/** The four headline numbers for a month — powers the monthly dashboard. */
+export function monthStats(state: AppState, month: string): MonthStats {
+  const days = new Set<string>()
+  let checkIns = 0
+  for (const a of state.attendance) {
+    if (monthKey(a.sessionDate) !== month) continue
+    days.add(a.sessionDate)
+    checkIns += 1
+  }
+  const collected = state.payments
+    .filter((p) => monthKey(p.paidOn) === month)
+    .reduce((s, p) => s + p.amount, 0)
+  const outstanding = monthlyOwing(state, month).reduce((s, r) => s + r.total, 0)
+  return { sessionDays: days.size, checkIns, collected, outstanding }
+}
+
+/** Attendance milestones celebrated in the parent view. */
+export const MILESTONES = [10, 25, 50, 100, 150, 200, 300]
+
+/** Highest milestone reached, or null. */
+export function milestoneReached(count: number): number | null {
+  let best: number | null = null
+  for (const m of MILESTONES) if (count >= m) best = m
+  return best
+}
+
+/** Next milestone ahead, or null once past the last one. */
+export function nextMilestone(count: number): number | null {
+  return MILESTONES.find((m) => m > count) ?? null
+}
+
 /** Attended sessions for a swimmer in a month, oldest first, with amounts. */
 export function attendedSessions(
   state: AppState,

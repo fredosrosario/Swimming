@@ -1,10 +1,11 @@
-import { type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { renderSVG } from 'uqr'
 import { store } from '../../lib/store'
 import { useAppState } from '../../lib/useStore'
 import LanguageToggle from '../../components/LanguageToggle'
-import { toast } from '../../components/ui'
-import { CopyIcon, DownloadIcon, ShareIcon } from '../../components/icons'
+import { Sheet, toast } from '../../components/ui'
+import { CopyIcon, DownloadIcon, QrIcon, ShareIcon } from '../../components/icons'
 
 export default function SettingsScreen() {
   const { t } = useTranslation()
@@ -126,6 +127,7 @@ function Field({
 
 function LinkRow({ label, url, onRotate }: { label: string; url: string; onRotate: () => void }) {
   const { t } = useTranslation()
+  const [showQr, setShowQr] = useState(false)
   const canShare = typeof navigator !== 'undefined' && 'share' in navigator
 
   async function copy() {
@@ -162,14 +164,35 @@ function LinkRow({ label, url, onRotate }: { label: string; url: string; onRotat
             {t('settings.shareLink')}
           </button>
         )}
+        <button onClick={() => setShowQr(true)} className="btn-secondary !min-h-[36px] gap-1 !px-3 text-sm">
+          <QrIcon className="h-4 w-4" />
+          {t('settings.showQr')}
+        </button>
         <span className="flex-1" />
-        <button
-          onClick={onRotate}
-          className="btn-danger !min-h-[36px] !px-3 text-sm"
-        >
+        <button onClick={onRotate} className="btn-danger !min-h-[36px] !px-3 text-sm">
           {t('settings.rotate')}
         </button>
       </div>
+      {showQr && <QrSheet label={label} url={url} onClose={() => setShowQr(false)} />}
     </div>
+  )
+}
+
+function QrSheet({ label, url, onClose }: { label: string; url: string; onClose: () => void }) {
+  const { t } = useTranslation()
+  // uqr emits a plain black-on-white SVG string — safe to inline (our input).
+  const svg = useMemo(() => renderSVG(url, { ecc: 'M', border: 2 }), [url])
+  return (
+    <Sheet title={t('settings.qrTitle')} onClose={onClose}>
+      <p className="mb-3 text-sm text-slate-500">{label}</p>
+      <div
+        className="mx-auto w-64 max-w-full overflow-hidden rounded-2xl ring-1 ring-slate-200 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
+        dangerouslySetInnerHTML={{ __html: svg }}
+      />
+      <p className="mt-3 text-center text-xs text-slate-400">{t('settings.qrHint')}</p>
+      <button onClick={onClose} className="btn-secondary mt-4 w-full">
+        {t('common.close')}
+      </button>
+    </Sheet>
   )
 }

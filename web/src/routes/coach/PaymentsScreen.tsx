@@ -3,12 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { store } from '../../lib/store'
 import { useAppState } from '../../lib/useStore'
 import { monthLabel, netBalance, outstandingBalance, outstandingByMonth } from '../../lib/ledger'
+import { compactAmount } from '../../lib/format'
 import type { Swimmer } from '../../lib/types'
 import { Avatar, EmptyState, Sheet, toast } from '../../components/ui'
 import { ChevronRightIcon, SearchIcon, TrashIcon, XIcon } from '../../components/icons'
 
 export default function PaymentsScreen() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const state = useAppState()
   const [openFor, setOpenFor] = useState<Swimmer | null>(null)
   const [query, setQuery] = useState('')
@@ -39,7 +40,7 @@ export default function PaymentsScreen() {
       <div className="card flex items-center justify-between p-4">
         <div>
           <div className="text-2xl font-bold text-slate-800">
-            {totalOwed}
+            {compactAmount(totalOwed, i18n.language)}
             {currency}
           </div>
           <div className="text-sm text-slate-400">{t('payments.totalLabel')}</div>
@@ -136,7 +137,12 @@ function BalanceRow({
     <li>
       <button onClick={onOpen} className="card flex min-h-[60px] w-full items-center gap-3 px-3 text-left">
         <Avatar name={swimmer.displayName} />
-        <span className="flex-1 truncate font-medium text-slate-800">{swimmer.displayName}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium text-slate-800">{swimmer.displayName}</span>
+          {swimmer.note && (
+            <span className="block truncate text-xs text-slate-400">{swimmer.note}</span>
+          )}
+        </span>
         <span
           className={`text-sm font-semibold ${
             balance > 0 ? 'text-rose-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-400'
@@ -172,8 +178,11 @@ function PaymentSheet({ swimmer, onClose }: { swimmer: Swimmer; onClose: () => v
 
   function record() {
     if (!valid) return
-    store.addPayment(swimmer.id, n, store.today(), note.trim() || undefined)
-    toast(t('payments.recorded', { name: swimmer.displayName, amount: `${n}${currency}` }))
+    const payment = store.addPayment(swimmer.id, n, store.today(), note.trim() || undefined)
+    toast(t('payments.recorded', { name: swimmer.displayName, amount: `${n}${currency}` }), {
+      label: t('common.undo'),
+      run: () => store.deletePayment(payment.id),
+    })
     onClose()
   }
 
@@ -190,6 +199,9 @@ function PaymentSheet({ swimmer, onClose }: { swimmer: Swimmer; onClose: () => v
             >
               {owed > 0 ? t('payments.owes', { amount: `${owed}${currency}` }) : t('payments.settled')}
             </span>
+            {swimmer.note && (
+              <span className="block text-xs font-normal text-slate-400">{swimmer.note}</span>
+            )}
           </span>
         </span>
       }
@@ -265,8 +277,11 @@ function PaymentSheet({ swimmer, onClose }: { swimmer: Swimmer; onClose: () => v
                 </span>
                 <button
                   onClick={() => {
-                    if (confirm(t('payments.confirmDelete', { amount: `${p.amount}${currency}` })))
-                      store.deletePayment(p.id)
+                    store.deletePayment(p.id)
+                    toast(t('payments.deleted', { amount: `${p.amount}${currency}` }), {
+                      label: t('common.undo'),
+                      run: () => store.restorePayment(p),
+                    })
                   }}
                   aria-label={t('payments.delete')}
                   className="rounded-lg p-2 text-rose-400 active:bg-rose-50"

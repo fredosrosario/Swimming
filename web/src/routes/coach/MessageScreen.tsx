@@ -2,23 +2,31 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { store } from '../../lib/store'
 import { useAppState } from '../../lib/useStore'
-import { buildMonthlyMessage, monthlyOwing } from '../../lib/ledger'
+import { buildMonthlyMessage, monthStats, monthlyOwing } from '../../lib/ledger'
 import { addMonths, formatMonthTitle } from '../../lib/dates'
-import { EmptyState, Stepper, toast } from '../../components/ui'
-import { CopyIcon, ShareIcon } from '../../components/icons'
+import { compactAmount } from '../../lib/format'
+import { EmptyState, StatTile, Stepper, toast } from '../../components/ui'
+import {
+  CheckIcon,
+  CopyIcon,
+  PaymentsIcon,
+  RollCallIcon,
+  ShareIcon,
+} from '../../components/icons'
 
 export default function MessageScreen() {
   const { t, i18n } = useTranslation()
   const state = useAppState()
   const [month, setMonth] = useState(() => store.today().slice(0, 7))
 
-  const { message, rows, total } = useMemo(() => {
+  const { message, rows, total, stats } = useMemo(() => {
     const [y, m] = month.split('-').map(Number)
     const owing = monthlyOwing(state, month)
     return {
       message: buildMonthlyMessage(state, y, m),
       rows: owing,
       total: owing.reduce((s, r) => s + r.total, 0),
+      stats: monthStats(state, month),
     }
   }, [state, month])
 
@@ -51,6 +59,34 @@ export default function MessageScreen() {
           onPrev={() => setMonth(addMonths(month, -1))}
           onNext={() => setMonth(addMonths(month, 1))}
           label={formatMonthTitle(month, i18n.language)}
+        />
+      </div>
+
+      {/* the month at a glance */}
+      <div className="grid grid-cols-2 gap-2">
+        <StatTile
+          tone="brand"
+          icon={<RollCallIcon className="h-5 w-5" />}
+          label={t('message.statDays')}
+          value={String(stats.sessionDays)}
+        />
+        <StatTile
+          tone="brand"
+          icon={<CheckIcon className="h-5 w-5" />}
+          label={t('message.statCheckIns')}
+          value={String(stats.checkIns)}
+        />
+        <StatTile
+          tone="emerald"
+          icon={<PaymentsIcon className="h-5 w-5" />}
+          label={t('message.statCollected')}
+          value={`${compactAmount(stats.collected, i18n.language)}${currency}`}
+        />
+        <StatTile
+          tone="rose"
+          icon={<PaymentsIcon className="h-5 w-5" />}
+          label={t('message.statOutstanding')}
+          value={`${compactAmount(stats.outstanding, i18n.language)}${currency}`}
         />
       </div>
 

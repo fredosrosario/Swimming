@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { store } from '../../lib/store'
 import { useAppState } from '../../lib/useStore'
 import type { Swimmer } from '../../lib/types'
-import { Avatar, EmptyState } from '../../components/ui'
+import { Avatar, EmptyState, toast } from '../../components/ui'
 import { ArchiveIcon, PencilIcon, PlusIcon, RestoreIcon } from '../../components/icons'
 
 export default function RosterScreen() {
@@ -81,15 +81,24 @@ function RosterRow({ swimmer, sessions }: { swimmer: Swimmer; sessions: number }
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(swimmer.displayName)
+  const [note, setNote] = useState(swimmer.note ?? '')
 
   function save() {
-    if (name.trim()) store.renameSwimmer(swimmer.id, name)
+    if (name.trim()) store.updateSwimmer(swimmer.id, { displayName: name, note })
     setEditing(false)
+  }
+
+  function archive() {
+    store.setSwimmerActive(swimmer.id, false)
+    toast(t('roster.archivedToast', { name: swimmer.displayName }), {
+      label: t('common.undo'),
+      run: () => store.setSwimmerActive(swimmer.id, true),
+    })
   }
 
   if (editing) {
     return (
-      <li className="card flex items-center gap-2 p-2.5">
+      <li className="card flex flex-col gap-2 p-2.5">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -98,12 +107,28 @@ function RosterRow({ swimmer, sessions }: { swimmer: Swimmer; sessions: number }
             if (e.key === 'Escape') setEditing(false)
           }}
           autoFocus
-          className="input flex-1 !py-1.5"
-          aria-label={t('roster.rename')}
+          className="input !py-1.5"
+          aria-label={t('roster.namePlaceholder')}
         />
-        <button onClick={save} className="btn-primary !min-h-[36px] !px-3 text-sm">
-          {t('common.save')}
-        </button>
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') save()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          placeholder={t('roster.notePlaceholder')}
+          className="input !py-1.5 text-sm"
+          aria-label={t('roster.notePlaceholder')}
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setEditing(false)} className="btn-secondary !min-h-[36px] !px-3 text-sm">
+            {t('common.cancel')}
+          </button>
+          <button onClick={save} className="btn-primary !min-h-[36px] !px-3 text-sm">
+            {t('common.save')}
+          </button>
+        </div>
       </li>
     )
   }
@@ -113,13 +138,15 @@ function RosterRow({ swimmer, sessions }: { swimmer: Swimmer; sessions: number }
       <Avatar name={swimmer.displayName} />
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium text-slate-800">{swimmer.displayName}</div>
-        <div className="text-xs text-slate-400">
+        <div className="truncate text-xs text-slate-400">
           {sessions > 0 ? t('roster.sessions', { count: sessions }) : t('roster.neverAttended')}
+          {swimmer.note ? ` · ${swimmer.note}` : ''}
         </div>
       </div>
       <button
         onClick={() => {
           setName(swimmer.displayName)
+          setNote(swimmer.note ?? '')
           setEditing(true)
         }}
         aria-label={`${t('roster.rename')} ${swimmer.displayName}`}
@@ -128,10 +155,7 @@ function RosterRow({ swimmer, sessions }: { swimmer: Swimmer; sessions: number }
         <PencilIcon className="h-5 w-5" />
       </button>
       <button
-        onClick={() => {
-          if (confirm(t('roster.confirmArchive', { name: swimmer.displayName })))
-            store.setSwimmerActive(swimmer.id, false)
-        }}
+        onClick={archive}
         aria-label={`${t('roster.archive')} ${swimmer.displayName}`}
         className="rounded-xl p-2.5 text-rose-400 active:bg-rose-50"
       >

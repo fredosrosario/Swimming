@@ -4,8 +4,10 @@ import { store } from '../lib/store'
 import { useAppState } from '../lib/useStore'
 import {
   attendedSessions,
+  milestoneReached,
   monthLabel,
   netBalance,
+  nextMilestone,
   outstandingByMonth,
 } from '../lib/ledger'
 import { addMonths, formatDateLabel, formatMonthTitle } from '../lib/dates'
@@ -37,15 +39,13 @@ export default function ParentApp() {
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col bg-slate-100">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 pb-2 pt-safe backdrop-blur">
-        <div className="flex items-center justify-between pt-2">
+      <header className="sticky top-0 z-10 bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 px-4 pb-2.5 pt-safe text-white shadow-md">
+        <div className="flex items-center justify-between gap-2 pt-2.5">
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold text-slate-800">
-              {state.settings.clubName}
-            </h1>
-            <p className="text-xs text-slate-400">{t('parent.readonly')}</p>
+            <h1 className="truncate text-base font-bold">{state.settings.clubName}</h1>
+            <p className="truncate text-xs text-brand-100">{t('parent.readonly')}</p>
           </div>
-          <LanguageToggle />
+          <LanguageToggle onDark />
         </div>
       </header>
 
@@ -147,6 +147,9 @@ function SwimmerDetailSheet({
     .filter((p) => p.swimmerId === swimmer.id)
     .sort((a, b) => b.paidOn.localeCompare(a.paidOn))
   const owedTotal = owingMonths.reduce((s, m) => s + m.amount, 0)
+  const totalSessions = state.attendance.filter((a) => a.swimmerId === swimmer.id).length
+  const reached = milestoneReached(totalSessions)
+  const next = nextMilestone(totalSessions)
 
   return (
     <Sheet
@@ -169,6 +172,41 @@ function SwimmerDetailSheet({
         </span>
       }
     >
+      {/* milestone progress — a little celebration for the kids */}
+      {totalSessions > 0 && (
+        <div className="mb-4 rounded-2xl bg-gradient-to-r from-brand-50 to-sky-50 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-slate-700">
+              {t('parent.totalSessions', { count: totalSessions })}
+            </span>
+            {reached && (
+              <span className="chip bg-amber-100 text-amber-700">
+                🏅 {t('parent.milestone', { target: reached })}
+              </span>
+            )}
+          </div>
+          {next && (
+            <>
+              <div
+                className="mt-2 h-1.5 overflow-hidden rounded-full bg-brand-100"
+                role="progressbar"
+                aria-valuenow={totalSessions}
+                aria-valuemin={reached ?? 0}
+                aria-valuemax={next}
+              >
+                <div
+                  className="h-full rounded-full bg-brand-500 transition-all"
+                  style={{ width: `${Math.min(100, (totalSessions / next) * 100)}%` }}
+                />
+              </div>
+              <div className="mt-1 text-xs text-slate-400">
+                {t('parent.nextMilestone', { remaining: next - totalSessions, target: next })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="section-label mb-1">
         {t('parent.sessionsIn')} · {formatMonthTitle(month, i18n.language)}
       </div>

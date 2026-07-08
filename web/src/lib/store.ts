@@ -304,11 +304,19 @@ class Store {
     return swimmer
   }
 
-  renameSwimmer(id: string, displayName: string) {
+  updateSwimmer(id: string, patch: Partial<Pick<Swimmer, 'displayName' | 'note'>>) {
     this.commit({
       ...this.state,
       swimmers: this.state.swimmers.map((s) =>
-        s.id === id ? { ...s, displayName: displayName.trim() } : s,
+        s.id === id
+          ? {
+              ...s,
+              ...(patch.displayName !== undefined
+                ? { displayName: patch.displayName.trim() }
+                : {}),
+              ...(patch.note !== undefined ? { note: patch.note.trim() || undefined } : {}),
+            }
+          : s,
       ),
     })
   }
@@ -382,6 +390,12 @@ class Store {
 
   deletePayment(id: string) {
     this.commit({ ...this.state, payments: this.state.payments.filter((p) => p.id !== id) })
+  }
+
+  /** Re-insert a payment removed by deletePayment — powers undo. */
+  restorePayment(payment: Payment) {
+    if (this.state.payments.some((p) => p.id === payment.id)) return
+    this.commit({ ...this.state, payments: [...this.state.payments, payment] })
   }
 
   // ---- settings ----

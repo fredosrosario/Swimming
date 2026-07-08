@@ -49,23 +49,32 @@ export function Sheet({ title, onClose, children }: SheetProps) {
 
 /* ---------------------------------------------------------------- Toast -- */
 
-type ToastListener = (msg: string) => void
+export interface ToastAction {
+  label: string
+  run: () => void
+}
+interface ToastPayload {
+  msg: string
+  action?: ToastAction
+}
+type ToastListener = (t: ToastPayload) => void
 const toastListeners = new Set<ToastListener>()
 
-/** Fire-and-forget confirmation message shown briefly at the bottom. */
-export function toast(msg: string) {
-  toastListeners.forEach((l) => l(msg))
+/** Brief confirmation at the bottom; pass an action for an undo button. */
+export function toast(msg: string, action?: ToastAction) {
+  toastListeners.forEach((l) => l({ msg, action }))
 }
 
 export function Toaster() {
-  const [msg, setMsg] = useState<string | null>(null)
+  const [current, setCurrent] = useState<ToastPayload | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    const listener: ToastListener = (m) => {
-      setMsg(m)
+    const listener: ToastListener = (t) => {
+      setCurrent(t)
       if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => setMsg(null), 2200)
+      // Undoable toasts linger longer so the button is actually reachable.
+      timer.current = setTimeout(() => setCurrent(null), t.action ? 5000 : 2200)
     }
     toastListeners.add(listener)
     return () => {
@@ -74,14 +83,27 @@ export function Toaster() {
     }
   }, [])
 
-  if (!msg) return null
+  if (!current) return null
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-24 z-30 flex justify-center px-4">
       <div
         role="status"
-        className="max-w-md rounded-full bg-slate-800/95 px-4 py-2 text-sm font-medium text-white shadow-lg animate-toast-in"
+        className="pointer-events-auto flex max-w-md items-center gap-3 rounded-full bg-slate-800/95 py-2 pl-4 pr-2 text-sm font-medium text-white shadow-lg animate-toast-in"
       >
-        {msg}
+        {current.msg}
+        {current.action ? (
+          <button
+            onClick={() => {
+              current.action!.run()
+              setCurrent(null)
+            }}
+            className="rounded-full bg-white/15 px-3 py-1 font-semibold text-brand-200 active:bg-white/25"
+          >
+            {current.action.label}
+          </button>
+        ) : (
+          <span className="pr-2" />
+        )}
       </div>
     </div>
   )
@@ -102,10 +124,52 @@ export function Avatar({ name, size = 'md' }: { name: string; size?: 'md' | 'lg'
     <span
       aria-hidden="true"
       className={`flex shrink-0 items-center justify-center rounded-full font-semibold ${cls}`}
-      style={{ background: `hsl(${hue} 85% 92%)`, color: `hsl(${hue} 55% 35%)` }}
+      style={{
+        background: `linear-gradient(135deg, hsl(${hue} 90% 94%), hsl(${(hue + 40) % 360} 85% 88%))`,
+        color: `hsl(${hue} 55% 32%)`,
+      }}
     >
       {name.slice(0, 1)}
     </span>
+  )
+}
+
+/* ------------------------------------------------------------- StatTile -- */
+
+const TILE_TONES = {
+  brand: 'bg-brand-50 text-brand-600',
+  emerald: 'bg-emerald-50 text-emerald-600',
+  rose: 'bg-rose-50 text-rose-600',
+  amber: 'bg-amber-50 text-amber-600',
+} as const
+
+/** Headline number: value in ink, muted label, tone carried by the icon. */
+export function StatTile({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: ReactNode
+  label: string
+  value: string
+  tone: keyof typeof TILE_TONES
+}) {
+  return (
+    <div className="card flex items-center gap-3 p-3">
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${TILE_TONES[tone]}`}
+        aria-hidden="true"
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-lg font-semibold leading-tight text-slate-800">
+          {value}
+        </span>
+        <span className="block truncate text-xs text-slate-400">{label}</span>
+      </span>
+    </div>
   )
 }
 

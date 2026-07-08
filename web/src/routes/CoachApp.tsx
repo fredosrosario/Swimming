@@ -34,15 +34,13 @@ export default function CoachApp() {
 
   return (
     <div className="mx-auto flex min-h-full max-w-md flex-col bg-slate-100">
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 pb-2 pt-safe backdrop-blur">
-        <div className="flex items-center justify-between pt-2">
+      <header className="sticky top-0 z-10 bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 px-4 pb-2.5 pt-safe text-white shadow-md">
+        <div className="flex items-center justify-between gap-2 pt-2.5">
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold text-slate-800">
-              {t(`nav.${tab}`)}
-            </h1>
-            <p className="truncate text-xs text-slate-400">{settings.clubName}</p>
+            <h1 className="truncate text-base font-bold">{t(`nav.${tab}`)}</h1>
+            <p className="truncate text-xs text-brand-100">{settings.clubName}</p>
           </div>
-          <SyncBadge />
+          <SyncBadge onDark />
         </div>
       </header>
 

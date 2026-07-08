@@ -152,6 +152,15 @@ export const HomeIcon = (p: IconProps) => (
   </Base>
 )
 
+export const QrIcon = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <path d="M14 14h3v3h-3zM20 14h1M14 20h1M18 18h3v3h-3z" />
+  </Base>
+)
+
 export const LockIcon = (p: IconProps) => (
   <Base {...p}>
     <rect x="5" y="11" width="14" height="9" rx="2" />
