@@ -1,13 +1,13 @@
 // Token-gated gateway for the KaPok Swim Club app.
 //
-//   GET  /functions/v1/api?token=...   → returns the whole AppState.
-//                                         Coach token: full state.
-//                                         Parent token: state with coachToken hidden.
-//   GET  /functions/v1/api?pin=...     → recovery: if the PIN matches
+//   GET  /functions/v1/api               → PUBLIC read-only state (coachToken +
+//                                         recoveryPin stripped). The shared link.
+//   GET  /functions/v1/api?token=coach  → full state (coach only).
+//   GET  /functions/v1/api?pin=...      → coach login: if the PIN matches
 //                                         settings.recoveryPin (default 1111),
-//                                         returns just { coachToken, parentToken }
-//                                         so a fresh device can find its links.
-//   POST /functions/v1/api?token=...   → replaces the whole AppState (coach token only).
+//                                         returns { coachToken, parentToken } so
+//                                         the device can open the coach view.
+//   POST /functions/v1/api?token=coach  → replaces the whole AppState (coach only).
 //
 // Deploy with JWT verification OFF so the browser needs no Supabase auth header —
 // this function does its own capability-token check:
@@ -52,12 +52,19 @@ Deno.serve(async (req) => {
   // deno-lint-ignore no-explicit-any
   const state: any = row.data
   const isCoach = token !== '' && token === state.settings?.coachToken
-  const isParent = token !== '' && token === state.settings?.parentToken
+
+  // Read-only view for everyone else: the edit token AND the login PIN must
+  // never reach a non-coach device (a parent could otherwise read the PIN and
+  // elevate themselves).
+  // deno-lint-ignore no-explicit-any
+  const parentSafe = (s: any) => ({
+    ...s,
+    settings: { ...s.settings, coachToken: undefined, recoveryPin: undefined },
+  })
 
   if (req.method === 'GET') {
-    // Recovery path: a device that lost (or never had) its link can trade the
-    // PIN for the coach/parent tokens. This grants edit access, so the coach
-    // should set a private PIN — see settings.recoveryPin (defaults to 1111).
+    // Coach login: trade the PIN for the coach token. This grants edit access,
+    // so the coach should set a private PIN — settings.recoveryPin (default 1111).
     const pin = url.searchParams.get('pin')
     if (pin !== null) {
       const realPin = String(state.settings?.recoveryPin ?? '').trim() || '1111'
@@ -68,10 +75,10 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (!isCoach && !isParent) return json({ error: 'invalid_token' }, 403)
+    // The coach token unlocks the full state; anything else (a parent token, a
+    // stale token, or no token at all) gets the public read-only view.
     if (isCoach) return json(state)
-    // Parents must not learn the coach (edit) token.
-    return json({ ...state, settings: { ...state.settings, coachToken: undefined } })
+    return json(parentSafe(state))
   }
 
   if (req.method === 'POST') {

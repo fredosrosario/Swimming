@@ -32,6 +32,14 @@ export async function fetchRemoteState(token: string): Promise<AppState> {
   return (await res.json()) as AppState
 }
 
+/** Public read-only state — no token. Coach token and PIN are stripped server
+ *  side. Backs the shared base URL. No custom headers → no CORS preflight. */
+export async function fetchPublicState(): Promise<AppState> {
+  const res = await fetch(ENDPOINT, { method: 'GET' })
+  if (!res.ok) throw new ApiError('GET', res.status)
+  return (await res.json()) as AppState
+}
+
 /** Replace the whole app state (coach token only; server rejects others). */
 export async function pushRemoteState(token: string, state: AppState): Promise<void> {
   await call('POST', token, state)

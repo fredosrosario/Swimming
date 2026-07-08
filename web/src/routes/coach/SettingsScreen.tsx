@@ -66,22 +66,7 @@ export default function SettingsScreen() {
 
       <Section title={t('settings.links')}>
         <p className="mb-3 text-xs leading-relaxed text-slate-400">{t('settings.linksHint')}</p>
-        <LinkRow
-          label={t('settings.parentLink')}
-          url={`${base}#/p/${settings.parentToken}`}
-          onRotate={() => {
-            if (confirm(t('settings.rotateWarn'))) void store.rotateToken('parentToken')
-          }}
-        />
-        {settings.coachToken && (
-          <LinkRow
-            label={t('settings.coachLink')}
-            url={`${base}#/c/${settings.coachToken}`}
-            onRotate={() => {
-              if (confirm(t('settings.rotateWarn'))) void store.rotateToken('coachToken')
-            }}
-          />
-        )}
+        <LinkRow label={t('settings.parentLink')} url={base} />
       </Section>
 
       <Section title={t('settings.recovery')}>
@@ -138,7 +123,7 @@ function Field({
   )
 }
 
-function LinkRow({ label, url, onRotate }: { label: string; url: string; onRotate: () => void }) {
+function LinkRow({ label, url, onRotate }: { label: string; url: string; onRotate?: () => void }) {
   const { t } = useTranslation()
   const [showQr, setShowQr] = useState(false)
   const canShare = typeof navigator !== 'undefined' && 'share' in navigator
@@ -181,10 +166,14 @@ function LinkRow({ label, url, onRotate }: { label: string; url: string; onRotat
           <QrIcon className="h-4 w-4" />
           {t('settings.showQr')}
         </button>
-        <span className="flex-1" />
-        <button onClick={onRotate} className="btn-danger !min-h-[36px] !px-3 text-sm">
-          {t('settings.rotate')}
-        </button>
+        {onRotate && (
+          <>
+            <span className="flex-1" />
+            <button onClick={onRotate} className="btn-danger !min-h-[36px] !px-3 text-sm">
+              {t('settings.rotate')}
+            </button>
+          </>
+        )}
       </div>
       {showQr && <QrSheet label={label} url={url} onClose={() => setShowQr(false)} />}
     </div>

@@ -1,6 +1,13 @@
 import type { AppState, Payment, Settings, Swimmer } from './types'
 import { todayInTz } from './dates'
-import { REMOTE_ENABLED, ApiError, fetchRemoteState, pushRemoteState, recoverTokens } from './api'
+import {
+  REMOTE_ENABLED,
+  ApiError,
+  fetchRemoteState,
+  fetchPublicState,
+  pushRemoteState,
+  recoverTokens,
+} from './api'
 
 /** Recovery PIN as actually enforced: blank falls back to the 1111 default. */
 export function effectivePin(settings: Settings): string {
@@ -101,7 +108,9 @@ class Store {
   private listeners = new Set<Listener>()
 
   // Remote sync state (only used when REMOTE_ENABLED).
+  // token: the active capability token; null = public read-only (base URL).
   private token: string | null = null
+  private connected = false // connect() has run at least once
   private sync: SyncStatus = {
     loaded: !REMOTE_ENABLED, // local-only mode is "loaded" from localStorage
     role: REMOTE_ENABLED ? null : 'coach', // local-only mode: always writable
@@ -192,30 +201,35 @@ class Store {
   }
 
   /**
-   * Called by the route guards once the URL token is known. Fetches the shared
-   * state from the server; the coach (whose token matches) becomes writable,
-   * everyone polls for updates.
+   * Called by the route guards. With a token, fetches the token's state (the
+   * coach whose token matches becomes writable); with no token, fetches the
+   * public read-only state (the shared base URL). Everyone polls for updates.
    */
-  connect(tok: string): Promise<void> | undefined {
+  connect(tok?: string | null): Promise<void> | undefined {
     if (!REMOTE_ENABLED) return
-    if (this.token === tok && (this.connecting || this.sync.loaded))
+    const key = tok || null // '' / undefined → public
+    if (this.token === key && this.connected && (this.connecting || this.sync.loaded))
       return this.connecting ?? undefined
-    if (this.token !== tok) this.setSync({ loaded: false, role: null, rejected: false })
-    this.token = tok
+    if (this.token !== key || !this.connected)
+      this.setSync({ loaded: false, role: null, rejected: false })
+    this.token = key
+    this.connected = true
     this.connecting = (async () => {
       try {
-        const remote = await fetchRemoteState(tok)
+        const remote = key ? await fetchRemoteState(key) : await fetchPublicState()
         this.adoptRemote(remote)
-        this.setSync({ loaded: true, rejected: false, role: this.roleFor(remote, tok) })
+        const role: SyncRole = key ? this.roleFor(remote, key) : 'parent'
+        this.setSync({ loaded: true, rejected: false, role })
       } catch (e) {
-        if (e instanceof ApiError && e.status === 403) {
-          this.forgetRejectedToken(tok)
+        if (e instanceof ApiError && e.status === 403 && key) {
+          this.forgetRejectedToken(key)
           this.setSync({ loaded: true, rejected: true, role: null })
         } else {
           // Offline / transient failure: fall back to the cached copy and let
           // the poller keep retrying in the background.
           console.error('remote connect failed', e)
-          this.setSync({ loaded: true, rejected: false, role: this.roleFor(this.state, tok) })
+          const role: SyncRole = key ? this.roleFor(this.state, key) : 'parent'
+          this.setSync({ loaded: true, rejected: false, role })
         }
       } finally {
         this.connecting = null
@@ -266,13 +280,13 @@ class Store {
       const tok = this.token
       const busy = this.pushTimer !== null || this.pushInFlight
       const hidden = typeof document !== 'undefined' && document.hidden
-      if (tok && !busy && !hidden) {
+      if (this.connected && !busy && !hidden) {
         try {
-          const remote = await fetchRemoteState(tok)
+          const remote = tok ? await fetchRemoteState(tok) : await fetchPublicState()
           this.adoptRemote(remote)
-          this.setSync({ rejected: false, role: this.roleFor(remote, tok) })
+          this.setSync({ rejected: false, role: tok ? this.roleFor(remote, tok) : 'parent' })
         } catch (e) {
-          if (e instanceof ApiError && e.status === 403) {
+          if (e instanceof ApiError && e.status === 403 && tok) {
             // The link was reset while we were connected.
             this.forgetRejectedToken(tok)
             this.setSync({ rejected: true, role: null })

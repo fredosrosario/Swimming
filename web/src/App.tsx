@@ -22,11 +22,37 @@ function Loading() {
 }
 
 /**
- * In remote mode the SERVER decides what a token unlocks (the local cache may
- * hold stale or never-validated tokens); locally we compare against settings.
- * A coach token also opens the read-only parent view.
+ * Read-only parent view. `token` is undefined for the public base URL `/`, or a
+ * parent token for a legacy `/p/:token` link. Reads are public, so this always
+ * resolves to the parent view once loaded — there is no "invalid parent link".
  */
-function useGuard(kind: 'coach' | 'parent'): 'loading' | 'ok' | 'invalid' {
+function ParentRoute({ token }: { token?: string }) {
+  const sync = useSyncStatus()
+  useEffect(() => {
+    void store.connect(token)
+  }, [token])
+  if (!store.isRemote()) return <ParentApp />
+  if (!sync.loaded) return <Loading />
+  return <ParentApp />
+}
+
+function ParentTokenRoute() {
+  const { token } = useParams()
+  return <ParentRoute token={token} />
+}
+
+/** The shared base URL. Remote: public read-only view. Local dev: role chooser. */
+function RootRoute() {
+  if (!store.isRemote()) return <Home />
+  return <ParentRoute />
+}
+
+/**
+ * Coach view — the server decides ('coach' only for the exact coach token,
+ * which a device only obtains through the PIN login). Any other token resolves
+ * to a non-coach role and is turned away.
+ */
+function CoachGuard() {
   const { token } = useParams()
   const { settings } = useAppState()
   const sync = useSyncStatus()
@@ -34,35 +60,19 @@ function useGuard(kind: 'coach' | 'parent'): 'loading' | 'ok' | 'invalid' {
     if (token) void store.connect(token)
   }, [token])
   if (store.isRemote()) {
-    if (!sync.loaded) return 'loading'
-    if (sync.rejected) return 'invalid'
-    if (kind === 'coach') return sync.role === 'coach' ? 'ok' : 'invalid'
-    return sync.role !== null ? 'ok' : 'invalid'
+    if (!sync.loaded) return <Loading />
+    if (sync.rejected) return <InvalidLink />
+    return sync.role === 'coach' ? <CoachApp /> : <InvalidLink />
   }
-  const expected = kind === 'coach' ? settings.coachToken : settings.parentToken
-  return token && token === expected ? 'ok' : 'invalid'
-}
-
-function CoachGuard() {
-  const verdict = useGuard('coach')
-  if (verdict === 'loading') return <Loading />
-  if (verdict === 'invalid') return <InvalidLink />
-  return <CoachApp />
-}
-
-function ParentGuard() {
-  const verdict = useGuard('parent')
-  if (verdict === 'loading') return <Loading />
-  if (verdict === 'invalid') return <InvalidLink />
-  return <ParentApp />
+  return token && token === settings.coachToken ? <CoachApp /> : <InvalidLink />
 }
 
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<RootRoute />} />
       <Route path="/c/:token" element={<CoachGuard />} />
-      <Route path="/p/:token" element={<ParentGuard />} />
+      <Route path="/p/:token" element={<ParentTokenRoute />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
